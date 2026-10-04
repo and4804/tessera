@@ -16,8 +16,8 @@ COPY requirements.lock* pyproject.toml ./
 COPY wheelhouse /w/wheelhouse
 RUN set -e; mkdir -p wheelhouse; \
     if ! ls wheelhouse/*.whl >/dev/null 2>&1; then \
-      if [ -f requirements.lock ]; then pip download -d wheelhouse -r requirements.lock; \
-      else pip install --no-cache-dir pip-tools >/dev/null && pip-compile -q -o /tmp/req.txt pyproject.toml && pip download -d wheelhouse -r /tmp/req.txt; fi; \
+      if [ -f requirements.lock ]; then pip wheel --wheel-dir wheelhouse -r requirements.lock; \
+      else pip install --no-cache-dir pip-tools >/dev/null && pip-compile -q -o /tmp/req.txt pyproject.toml && pip wheel --wheel-dir wheelhouse -r /tmp/req.txt; fi; \
     fi
 
 FROM python:3.12-slim AS runtime
