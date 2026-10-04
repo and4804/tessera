@@ -1,0 +1,83 @@
+pack: 1
+id: zeek.conn
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: Zeek, product: Zeek conn.log, category: network_monitor}
+match:
+  priority: 40
+  all:
+    - regex: '^\d{9,10}\.\d+\t[A-Za-z0-9]{10,18}\t'
+framing: none
+extract:
+  kind: tsv_zeek
+  options:
+    # Used when no "#fields" header has been seen on the connection/file (headers, when present, take precedence).
+    fields: [ts, uid, id.orig_h, id.orig_p, id.resp_h, id.resp_p, proto, service, duration, orig_bytes, resp_bytes, conn_state,
+             local_orig, local_resp, missed_bytes, history, orig_pkts, orig_ip_bytes, resp_pkts, resp_ip_bytes, tunnel_parents]
+    unset: "-"
+    empty: "(empty)"
+select:
+  - otherwise: network_activity
+classes:
+  network_activity:
+    set:
+      activity_id: {const: 6}
+      time: {from: ts, pipe: [float, epoch_s]}
+      severity_id: {const: 1}
+      src_endpoint.ip: {from: id.orig_h, pipe: [ip]}
+      src_endpoint.port: {from: id.orig_p, pipe: [int, port]}
+      dst_endpoint.ip: {from: id.resp_h, pipe: [ip]}
+      dst_endpoint.port: {from: id.resp_p, pipe: [int, port]}
+      connection_info.protocol_name: {from: proto, pipe: [lower]}
+      connection_info.uid: uid
+      traffic.bytes_out: {from: orig_bytes, pipe: [int]}
+      traffic.bytes_in: {from: resp_bytes, pipe: [int]}
+      traffic.packets_out: {from: orig_pkts, pipe: [int]}
+      traffic.packets_in: {from: resp_pkts, pipe: [int]}
+      duration: {from: duration, pipe: [float, {mul: 1000}, int]}
+tests:
+  - name: tcp-established
+    raw: "1791120067.123000\tCzSkxl1Z2zHqDnFdh\t10.1.1.15\t51512\t142.250.77.14\t443\ttcp\tssl\t12.500000\t1520\t48210\tSF\tT\tF\t0\tShADadFf\t14\t1600\t41\t48500\t(empty)"
+    expect:
+      class_uid: 4001
+      time: 1791120067123
+      src_endpoint.ip: 10.1.1.15
+      src_endpoint.port: 51512
+      dst_endpoint.ip: 142.250.77.14
+      dst_endpoint.port: 443
+      connection_info.protocol_name: tcp
+      connection_info.uid: CzSkxl1Z2zHqDnFdh
+      traffic.bytes_out: 1520
+      traffic.bytes_in: 48210
+      traffic.packets_out: 14
+      traffic.packets_in: 41
+      duration: 12500
+      unmapped.service: ssl
+      unmapped.conn_state: SF
+      unmapped.history: ShADadFf
+  - name: unset-fields-are-not-mapped
+    raw: "1791120068.000000\tCAbCdEfGhIjKlMnOp\t203.0.113.50\t40000\t10.1.2.15\t22\ttcp\t-\t-\t-\t-\tS0\tF\tT\t0\tS\t1\t60\t0\t0\t(empty)"
+    expect:
+      src_endpoint.ip: 203.0.113.50
+      duration: null
+      traffic.bytes_out: null
+      unmapped.service: null
+      unmapped.conn_state: S0
+  - name: udp-dns
+    raw: "1791120069.250000\tCqWeRtYuIoPaSdFgH\t10.1.1.5\t53211\t10.1.1.1\t53\tudp\tdns\t0.031000\t40\t120\tSF\tT\tT\t0\tDd\t1\t68\t1\t148\t(empty)"
+    expect:
+      connection_info.protocol_name: udp
+      duration: 31
+      traffic.packets_out: 1
+  - name: ipv6-endpoints
+    raw: "1791120070.000000\tCzXcVbNmAsDfGhJkL\t2001:db8::15\t5000\t2001:db8:1::80\t443\ttcp\tssl\t1.000000\t100\t200\tSF\tT\tF\t0\tShADadFf\t3\t160\t3\t260\t(empty)"
+    expect:
+      src_endpoint.ip: "2001:db8::15"
+      dst_endpoint.ip: "2001:db8:1::80"
+      duration: 1000
+  - name: ts-without-fraction-digits-and-short-line
+    raw: "1791120071.5\tCzXcVbNmAsDfGhJkL\t10.1.1.15\t5000\t10.1.1.16\t80\ttcp"
+    expect:
+      time: 1791120071500
+      dst_endpoint.port: 80
+      traffic.bytes_out: null

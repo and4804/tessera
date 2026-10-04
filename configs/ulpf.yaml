@@ -1,0 +1,21 @@
+node_id: n1
+ocsf: {version: "1.3.0"}
+bus: {kind: redis, url: "redis://redis:6379/0", partitions: 16, maxlen: 2000000}
+ingest:
+  syslog_udp: {listen: "0.0.0.0:5140"}
+  syslog_tcp: {listen: "0.0.0.0:5140", framing: auto}
+  syslog_tls: {enabled: false, cert: /run/secrets/tls.crt, key: /run/secrets/tls.key}
+  http: {enabled: true, path: /ingest/raw}
+  file_watch: [{path: "/data/in/*.log", hint: "fortinet.fortigate"}]
+  max_event_bytes: 65536
+vault: {dir: /data/vault, block_events: 1000, block_max_ms: 500, segment_max_mb: 256, fsync: block, signing_key: /run/secrets/ulpf_ed25519}
+pipeline: {workers: auto, source_cache: true, default_tz: "UTC", sample_validate: 1000}
+packs: {dirs: [/app/packs, /data/packs/custom], hot_reload: true}
+sinks:
+  parquet: {enabled: true, dir: /data/lake, flush_rows: 50000, flush_secs: 5}
+  jsonl: {enabled: false, dir: /data/out}
+  opensearch: {enabled: false, url: "http://opensearch:9200", index: "ulpf-ocsf-%Y.%m.%d"}
+  splunk_hec: {enabled: false}
+  syslog_out: {enabled: false}
+analytics: {enabled: true, window_s: 60}
+onboard: {llm: {enabled: false, endpoint: "http://ollama:11434", model: "<any local instruct model>"}}

@@ -1,0 +1,17 @@
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+/data/
+secrets/
+.hypothesis/
+.benchmarks/
+wheelhouse/*.whl
+*.tar.gz
+.env
+*.pem
+ulpf_ed25519*

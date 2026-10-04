@@ -1,0 +1,17 @@
+.git
+**/__pycache__
+dist
+.venv
+data
+node_modules
+**/node_modules
+ui/dist
+.hypothesis
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.benchmarks
+secrets
+bench/*
+!bench/results.json
+tests

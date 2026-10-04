@@ -1,0 +1,46 @@
+[project]
+name = "ulpf"
+version = "0.1.0"
+description = "Universal Log Pre-processing Framework (Rosetta)"
+requires-python = ">=3.12"
+dependencies = [
+  "msgspec", "orjson", "pydantic>=2", "PyYAML", "zstandard", "PyNaCl",
+  "pyarrow", "duckdb", "drain3", "scikit-learn", "fastapi", "uvicorn",
+  "typer", "prometheus-client", "structlog", "redis", "httpx", "websockets",
+]
+[project.optional-dependencies]
+dev = ["pytest", "hypothesis", "pytest-benchmark", "pytest-asyncio", "ruff", "mypy", "types-PyYAML", "types-redis"]
+fast = ["uvloop", "google-re2", "watchfiles"]
+siem = ["opensearch-py"]
+
+[project.scripts]
+ulpf = "ulpf.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ulpf"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
+asyncio_mode = "auto"
+markers = ["slow: slow tests"]
+addopts = "-q -p no:cacheprovider"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501", "B008", "B905"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = ["ulpf.model.*", "ulpf.vault.*", "ulpf.packs.*"]
+strict = true

@@ -1,0 +1,89 @@
+pack: 1
+id: windows.event_xml
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: Microsoft, product: Windows Security Event Log, category: authentication}
+match:
+  priority: 50
+  all:
+    - contains: '<Event'
+    - contains: 'Microsoft-Windows-Security-Auditing'
+framing: none
+extract:
+  kind: xml
+  options:
+    strip_namespaces: true
+    # <Data Name="X">v</Data> under EventData/UserData is flattened as EventData.X (see docs/pack-dsl.md)
+    named_children: {Data: Name}
+select:
+  - {when: {field: System.EventID, eq: "4624"}, class: authentication}
+  - {when: {field: System.EventID, eq: "4625"}, class: authentication}
+  - otherwise: base_event
+classes:
+  authentication:
+    set:
+      activity_id: {const: 1}                                # Logon
+      time: {from: System.TimeCreated.@SystemTime, pipe: [iso8601]}
+      status_id: {from: System.EventID, pipe: [{lookup: {map: {"4624": 1, "4625": 2}}}]}
+      severity_id: {from: System.EventID, pipe: [{lookup: {map: {"4624": 1, "4625": 2}, default: 0}}]}
+      user.name: EventData.TargetUserName
+      user.domain: EventData.TargetDomainName
+      logon_type_id: {from: EventData.LogonType, pipe: [int]}
+      src_endpoint.ip: {from: EventData.IpAddress, pipe: [ip]}
+      src_endpoint.port: {from: EventData.IpPort, pipe: [int, port]}
+      src_endpoint.hostname: EventData.WorkstationName
+      dst_endpoint.hostname: System.Computer
+      auth_protocol: EventData.AuthenticationPackageName
+  base_event:
+    set:
+      time: {from: System.TimeCreated.@SystemTime, pipe: [iso8601]}
+      severity_id: {const: 1}
+      device.hostname: System.Computer
+tests:
+  - name: logon-failure-4625
+    raw: '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing" Guid="{54849625-5478-4994-A5BA-3E3B0328C30D}"/><EventID>4625</EventID><Version>0</Version><Level>0</Level><Task>12544</Task><Opcode>0</Opcode><Keywords>0x8010000000000000</Keywords><TimeCreated SystemTime="2026-10-04T13:21:07.1234567Z"/><EventRecordID>12345</EventRecordID><Correlation/><Execution ProcessID="652" ThreadID="4120"/><Channel>Security</Channel><Computer>DC01.corp.local</Computer><Security/></System><EventData><Data Name="SubjectUserSid">S-1-0-0</Data><Data Name="SubjectUserName">-</Data><Data Name="TargetUserName">admin</Data><Data Name="TargetDomainName">CORP</Data><Data Name="Status">0xc000006d</Data><Data Name="SubStatus">0xc000006a</Data><Data Name="LogonType">10</Data><Data Name="AuthenticationPackageName">NTLM</Data><Data Name="WorkstationName">WS-77</Data><Data Name="IpAddress">198.51.100.77</Data><Data Name="IpPort">44444</Data></EventData></Event>'
+    expect:
+      class_uid: 3002
+      type_uid: 300201
+      activity_id: 1
+      time: 1791120067123
+      status_id: 2
+      severity_id: 2
+      user.name: admin
+      user.domain: CORP
+      logon_type_id: 10
+      src_endpoint.ip: 198.51.100.77
+      src_endpoint.port: 44444
+      src_endpoint.hostname: WS-77
+      dst_endpoint.hostname: DC01.corp.local
+      auth_protocol: NTLM
+      unmapped.EventData.SubStatus: "0xc000006a"
+  - name: logon-success-4624
+    raw: '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing" Guid="{54849625-5478-4994-A5BA-3E3B0328C30D}"/><EventID>4624</EventID><TimeCreated SystemTime="2026-10-04T13:22:00.0000000Z"/><Channel>Security</Channel><Computer>DC01.corp.local</Computer></System><EventData><Data Name="TargetUserName">alice</Data><Data Name="TargetDomainName">CORP</Data><Data Name="LogonType">2</Data><Data Name="IpAddress">-</Data><Data Name="IpPort">-</Data></EventData></Event>'
+    expect:
+      status_id: 1
+      severity_id: 1
+      user.name: alice
+      src_endpoint.ip: null
+      src_endpoint.port: null
+      logon_type_id: 2
+      time: 1791120120000
+  - name: ipv6-source-address
+    raw: '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing"/><EventID>4625</EventID><TimeCreated SystemTime="2026-10-04T13:22:00.5Z"/><Computer>DC01</Computer></System><EventData><Data Name="TargetUserName">bob</Data><Data Name="LogonType">3</Data><Data Name="IpAddress">2001:db8::7</Data></EventData></Event>'
+    expect:
+      src_endpoint.ip: "2001:db8::7"
+      time: 1791120120500
+  - name: other-event-id-goes-to-base-event
+    raw: '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing"/><EventID>4688</EventID><TimeCreated SystemTime="2026-10-04T13:22:00.0000000Z"/><Computer>DC01</Computer></System><EventData><Data Name="NewProcessName">C:\Windows\System32\cmd.exe</Data></EventData></Event>'
+    expect:
+      class_uid: 0
+      device.hostname: DC01
+      unmapped.EventData.NewProcessName: 'C:\Windows\System32\cmd.exe'
+  - name: xml-escaped-entities-in-values
+    raw: '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing"/><EventID>4625</EventID><TimeCreated SystemTime="2026-10-04T13:22:00Z"/><Computer>DC01</Computer></System><EventData><Data Name="TargetUserName">o&apos;brien &amp; co</Data><Data Name="LogonType">3</Data></EventData></Event>'
+    expect:
+      user.name: "o'brien & co"
+  - name: dtd-entity-expansion-is-rejected
+    raw: '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe "boom">]><Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing"/><EventID>4625</EventID></System><EventData><Data Name="TargetUserName">&xxe;</Data></EventData></Event>'
+    expect:
+      ulpf.status: unparsed

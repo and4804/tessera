@@ -1,0 +1,193 @@
+pack: 1
+id: cisco.asa
+version: 1.0.0
+verified: false            # R12: illustrative sample logs; verify against Cisco ASA syslog message guide / real captures
+meta: {vendor: Cisco, product: ASA, category: firewall}
+match:
+  priority: 50
+  all:
+    - contains: '%ASA-'
+framing: none              # header (pri, optional timestamp with year, host) is parsed by the anchor below
+extract:
+  kind: regex
+  options:
+    # anchor captures: pri, ts (with or without year), host, sev, msgid, body.   Then patterns[msgid] is applied to `body`.
+    anchor: '^(?:<(?P<pri>\d+)>)?(?:(?P<ts>[A-Z][a-z]{2} +\d{1,2} (?:\d{4} )?\d\d:\d\d:\d\d):? )?(?:(?P<host>[\w.-]+) :? ?)?%ASA-(?P<sev>\d)-(?P<msgid>\d{6}): (?P<body>.*)$'
+    dispatch_on: msgid
+    dispatch_text: body
+    patterns:
+      "302013": 'Built (?P<dir>inbound|outbound) (?P<proto>TCP|UDP|ICMP) connection (?P<connid>\d+) for (?P<sif>[\w-]+):(?P<sip>[0-9A-Fa-f:.]+)/(?P<sport>\d+) \((?P<sip_nat>[0-9A-Fa-f:.]+)/(?P<sport_nat>\d+)\) to (?P<dif>[\w-]+):(?P<dip>[0-9A-Fa-f:.]+)/(?P<dport>\d+) \((?P<dip_nat>[0-9A-Fa-f:.]+)/(?P<dport_nat>\d+)\)'
+      "302015": 'Built (?P<dir>inbound|outbound) (?P<proto>TCP|UDP|ICMP) connection (?P<connid>\d+) for (?P<sif>[\w-]+):(?P<sip>[0-9A-Fa-f:.]+)/(?P<sport>\d+) \((?P<sip_nat>[0-9A-Fa-f:.]+)/(?P<sport_nat>\d+)\) to (?P<dif>[\w-]+):(?P<dip>[0-9A-Fa-f:.]+)/(?P<dport>\d+) \((?P<dip_nat>[0-9A-Fa-f:.]+)/(?P<dport_nat>\d+)\)'
+      "302014": 'Teardown (?P<proto>TCP|UDP|ICMP) connection (?P<connid>\d+) for (?P<sif>[\w-]+):(?P<sip>[0-9A-Fa-f:.]+)/(?P<sport>\d+) to (?P<dif>[\w-]+):(?P<dip>[0-9A-Fa-f:.]+)/(?P<dport>\d+)(?: \((?P<duser>[^)]+)\))? duration (?P<duration>\d+:\d\d:\d\d) bytes (?P<bytes>\d+)(?: (?P<reason>.*))?'
+      "302016": 'Teardown (?P<proto>TCP|UDP|ICMP) connection (?P<connid>\d+) for (?P<sif>[\w-]+):(?P<sip>[0-9A-Fa-f:.]+)/(?P<sport>\d+) to (?P<dif>[\w-]+):(?P<dip>[0-9A-Fa-f:.]+)/(?P<dport>\d+)(?: \((?P<duser>[^)]+)\))? duration (?P<duration>\d+:\d\d:\d\d) bytes (?P<bytes>\d+)(?: (?P<reason>.*))?'
+      "106023": 'Deny (?P<proto>\w+) src (?P<sif>[\w-]+):(?P<sip>[0-9A-Fa-f:.]+)/(?P<sport>\d+) dst (?P<dif>[\w-]+):(?P<dip>[0-9A-Fa-f:.]+)/(?P<dport>\d+)(?: \(type (?P<icmp_type>\d+), code (?P<icmp_code>\d+)\))? by access-group "(?P<acl>[^"]+)"(?: \[(?P<hash1>0x[0-9a-f]+), (?P<hash2>0x[0-9a-f]+)\])?'
+      "106100": 'access-list (?P<acl>\S+) (?P<verdict>permitted|denied|est-allowed) (?P<proto>\w+) (?P<sif>[\w-]+)/(?P<sip>[0-9A-Fa-f:.]+)\((?P<sport>\d+)\)(?: \((?P<suser>[^)]+)\))? -> (?P<dif>[\w-]+)/(?P<dip>[0-9A-Fa-f:.]+)\((?P<dport>\d+)\)(?: \((?P<duser>[^)]+)\))? hit-cnt (?P<hits>\d+) (?P<hitkind>first hit|\d+-second interval) \[(?P<hash1>0x[0-9a-f]+), (?P<hash2>0x[0-9a-f]+)\]'
+      "710003": '(?P<proto>TCP|UDP) access denied by ACL from (?P<sip>[0-9A-Fa-f:.]+)/(?P<sport>\d+) to (?P<dif>[\w-]+):(?P<dip>[0-9A-Fa-f:.]+)/(?P<dport>\d+)'
+      "113005": 'AAA user authentication Rejected : reason = (?P<reason>[^:]+?) : server = (?P<server>\S+) : user = (?P<user>\S*) : user IP = (?P<uip>\S+)'
+      "113015": 'AAA user authentication Rejected : reason = (?P<reason>[^:]+?) : local database : user = (?P<user>\S*) : user IP = (?P<uip>\S+)'
+select:
+  - {when: {field: msgid, eq: "302013"}, class: network_activity}
+  - {when: {field: msgid, eq: "302014"}, class: network_activity}
+  - {when: {field: msgid, eq: "302015"}, class: network_activity}
+  - {when: {field: msgid, eq: "302016"}, class: network_activity}
+  - {when: {field: msgid, eq: "106023"}, class: network_activity}
+  - {when: {field: msgid, eq: "106100"}, class: network_activity}
+  - {when: {field: msgid, eq: "710003"}, class: network_activity}
+  - {when: {field: msgid, eq: "113005"}, class: authentication}
+  - {when: {field: msgid, eq: "113015"}, class: authentication}
+  - otherwise: base_event
+ignore:
+  body: "message text after the %ASA-n-id prefix; fully covered by the dispatched pattern fields and the vaulted raw"
+classes:
+  network_activity:
+    set:
+      # 302013/302015 Open, 302014/302016 Close, 10xxxx denies = Refuse (5)
+      activity_id: {from: msgid, pipe: [{lookup: {map: {"302013": 1, "302015": 1, "302014": 2, "302016": 2, "106023": 5, "106100": 5, "710003": 5}, default: 6}}]}
+      time: {from: ts, pipe: [{strptime: {fmt: "%b %d %Y %H:%M:%S", tz: UTC}}]}
+      severity_id: {from: sev, pipe: [{lookup: {map: {"0": 6, "1": 5, "2": 5, "3": 4, "4": 3, "5": 2, "6": 1, "7": 1}, default: 0}}]}
+      action_id:
+        when: {field: msgid, eq: "106100"}
+        then: {from: verdict, pipe: [{lookup: {map: {permitted: 1, est-allowed: 1, denied: 2}, default: 0}}]}
+        else: {from: msgid, pipe: [{lookup: {map: {"302013": 1, "302014": 1, "302015": 1, "302016": 1, "106023": 2, "710003": 2}, default: 0}}]}
+      disposition_id:
+        when: {field: msgid, eq: "106100"}
+        then: {from: verdict, pipe: [{lookup: {map: {permitted: 1, est-allowed: 1, denied: 2}, default: 0}}]}
+        else: {from: msgid, pipe: [{lookup: {map: {"302013": 1, "302014": 1, "302015": 1, "302016": 1, "106023": 2, "710003": 2}, default: 0}}]}
+      # ASA prints the *foreign* host first for outbound Built messages, so swap. Teardown messages carry no direction:
+      # endpoints then follow ASA's "for ... to ..." order (documented limitation).
+      src_endpoint.ip: {when: {field: dir, eq: outbound}, then: {from: dip, pipe: [ip]}, else: {from: sip, pipe: [ip]}}
+      src_endpoint.port: {when: {field: dir, eq: outbound}, then: {from: dport, pipe: [int, port]}, else: {from: sport, pipe: [int, port]}}
+      src_endpoint.interface_name: {when: {field: dir, eq: outbound}, then: dif, else: sif}
+      dst_endpoint.ip: {when: {field: dir, eq: outbound}, then: {from: sip, pipe: [ip]}, else: {from: dip, pipe: [ip]}}
+      dst_endpoint.port: {when: {field: dir, eq: outbound}, then: {from: sport, pipe: [int, port]}, else: {from: dport, pipe: [int, port]}}
+      dst_endpoint.interface_name: {when: {field: dir, eq: outbound}, then: sif, else: dif}
+      connection_info.protocol_name: {from: proto, pipe: [lower]}
+      connection_info.protocol_num: {from: proto, pipe: [lower, {lookup: {map: {tcp: 6, udp: 17, icmp: 1}}}]}
+      connection_info.uid: connid
+      traffic.bytes: {from: bytes, pipe: [int]}
+      device.hostname: host
+      metadata.original_time: ts
+  authentication:
+    set:
+      activity_id: {const: 1}                       # Logon
+      status_id: {const: 2}                         # Failure (113005/113015 are rejections)
+      time: {from: ts, pipe: [{strptime: {fmt: "%b %d %Y %H:%M:%S", tz: UTC}}]}
+      severity_id: {from: sev, pipe: [{lookup: {map: {"0": 6, "1": 5, "2": 5, "3": 4, "4": 3, "5": 2, "6": 1, "7": 1}, default: 0}}]}
+      user.name: user
+      src_endpoint.ip: {from: uip, pipe: [ip]}
+      device.hostname: host
+      metadata.original_time: ts
+  base_event:
+    set:
+      time: {from: ts, pipe: [{strptime: {fmt: "%b %d %Y %H:%M:%S", tz: UTC}}]}
+      severity_id: {from: sev, pipe: [{lookup: {map: {"0": 6, "1": 5, "2": 5, "3": 4, "4": 3, "5": 2, "6": 1, "7": 1}, default: 0}}]}
+      message: body
+      device.hostname: host
+tests:
+  - name: built-inbound-tcp-302013
+    raw: '<166>Oct 04 2026 13:21:07 ASA-EDGE : %ASA-6-302013: Built inbound TCP connection 123456 for outside:203.0.113.5/54321 (203.0.113.5/54321) to dmz:10.1.2.10/443 (10.1.2.10/443)'
+    expect:
+      class_uid: 4001
+      activity_id: 1
+      type_uid: 400101
+      time: 1791120067000
+      severity_id: 1
+      action_id: 1
+      src_endpoint.ip: 203.0.113.5
+      src_endpoint.port: 54321
+      src_endpoint.interface_name: outside
+      dst_endpoint.ip: 10.1.2.10
+      dst_endpoint.port: 443
+      dst_endpoint.interface_name: dmz
+      connection_info.protocol_name: tcp
+      connection_info.protocol_num: 6
+      connection_info.uid: "123456"
+      device.hostname: ASA-EDGE
+      unmapped.sport_nat: "54321"
+  - name: built-outbound-udp-swaps-endpoints-302015
+    raw: '<166>Oct 04 2026 13:21:08 ASA-EDGE : %ASA-6-302015: Built outbound UDP connection 99 for outside:8.8.8.8/53 (8.8.8.8/53) to inside:10.1.1.5/54000 (203.0.113.1/54000)'
+    expect:
+      activity_id: 1
+      src_endpoint.ip: 10.1.1.5
+      src_endpoint.port: 54000
+      src_endpoint.interface_name: inside
+      dst_endpoint.ip: 8.8.8.8
+      dst_endpoint.port: 53
+      connection_info.protocol_num: 17
+      unmapped.sip_nat: 8.8.8.8
+      unmapped.dip_nat: 203.0.113.1
+  - name: teardown-with-bytes-302014
+    raw: '<166>Oct 04 2026 13:21:19 ASA-EDGE : %ASA-6-302014: Teardown TCP connection 123456 for outside:203.0.113.5/54321 to dmz:10.1.2.10/443 duration 0:00:12 bytes 4521 TCP FINs'
+    expect:
+      activity_id: 2
+      type_uid: 400102
+      traffic.bytes: 4521
+      src_endpoint.ip: 203.0.113.5
+      connection_info.uid: "123456"
+      unmapped.duration: "0:00:12"
+      unmapped.reason: TCP FINs
+  - name: teardown-with-user-and-hours-302014
+    raw: '<166>Oct 04 2026 13:21:19 ASA-EDGE : %ASA-6-302014: Teardown TCP connection 77 for outside:203.0.113.5/54321 to inside:10.1.1.5/22 (alice) duration 12:34:56 bytes 99 SYN Timeout'
+    expect:
+      activity_id: 2
+      traffic.bytes: 99
+      unmapped.duser: alice
+      unmapped.duration: "12:34:56"
+      unmapped.reason: SYN Timeout
+  - name: acl-deny-106023
+    raw: '<164>Oct 04 2026 13:22:00 ASA-EDGE : %ASA-4-106023: Deny tcp src outside:198.51.100.77/44444 dst inside:10.1.2.22/22 by access-group "outside_in" [0x0, 0x0]'
+    expect:
+      class_uid: 4001
+      activity_id: 5
+      severity_id: 3
+      action_id: 2
+      disposition_id: 2
+      src_endpoint.ip: 198.51.100.77
+      dst_endpoint.port: 22
+      connection_info.protocol_name: tcp
+      unmapped.acl: outside_in
+  - name: access-list-denied-106100
+    raw: '<166>Oct 04 2026 13:22:01 ASA-EDGE : %ASA-6-106100: access-list outside_in denied tcp outside/198.51.100.77(44444) -> inside/10.1.2.22(22) hit-cnt 1 first hit [0x8c4b2a1, 0x0]'
+    expect:
+      activity_id: 5
+      action_id: 2
+      src_endpoint.interface_name: outside
+      dst_endpoint.interface_name: inside
+      unmapped.hits: "1"
+  - name: tcp-access-denied-710003
+    raw: '<164>Oct 04 2026 13:22:02 ASA-EDGE : %ASA-4-710003: TCP access denied by ACL from 198.51.100.77/44444 to outside:203.0.113.1/22'
+    expect:
+      action_id: 2
+      src_endpoint.ip: 198.51.100.77
+      dst_endpoint.ip: 203.0.113.1
+      dst_endpoint.interface_name: outside
+      src_endpoint.interface_name: null
+  - name: aaa-auth-rejected-113005
+    raw: '<166>Oct 04 2026 13:23:00 ASA-EDGE : %ASA-6-113005: AAA user authentication Rejected : reason = Invalid password : server = 10.1.2.5 : user = admin : user IP = 198.51.100.77'
+    expect:
+      class_uid: 3002
+      type_uid: 300201
+      status_id: 2
+      user.name: admin
+      src_endpoint.ip: 198.51.100.77
+      unmapped.reason: Invalid password
+      unmapped.server: 10.1.2.5
+  - name: aaa-user-not-found-113015-no-host
+    raw: '<166>Oct 04 2026 13:23:05: %ASA-6-113015: AAA user authentication Rejected : reason = User was not found : local database : user = bob : user IP = 198.51.100.77'
+    expect:
+      class_uid: 3002
+      user.name: bob
+      device.hostname: null
+  - name: bare-line-without-header-or-timestamp
+    raw: '%ASA-6-302013: Built inbound TCP connection 5 for outside:203.0.113.5/1000 (203.0.113.5/1000) to dmz:10.1.2.10/80 (10.1.2.10/80)'
+    expect:
+      class_uid: 4001
+      src_endpoint.ip: 203.0.113.5
+      ulpf.status: partial
+      ulpf.time_quality: recv_time
+  - name: unknown-message-id-goes-to-base-event
+    raw: '<166>Oct 04 2026 13:24:00 ASA-EDGE : %ASA-6-305011: Built dynamic TCP translation from inside:10.1.1.5/1234 to outside:203.0.113.1/1234'
+    expect:
+      class_uid: 0
+      message: Built dynamic TCP translation from inside:10.1.1.5/1234 to outside:203.0.113.1/1234
+      severity_id: 1

@@ -1,0 +1,115 @@
+pack: 1
+id: suricata.eve
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: OISF, product: Suricata EVE, category: ids}
+match:
+  priority: 50
+  all:
+    - starts_with: '{'
+    - contains: '"event_type"'
+framing: none
+extract:
+  kind: json
+  options: {}
+select:
+  - when: {field: event_type, eq: alert}
+    class: detection_finding
+  - when: {field: event_type, eq: flow}
+    class: network_activity
+  - otherwise: base_event
+classes:
+  detection_finding:
+    set:
+      activity_id: {const: 1}
+      time: {from: timestamp, pipe: [iso8601]}
+      severity_id: {from: alert.severity, pipe: [str, {lookup: {map: {"1": 4, "2": 3, "3": 2}, default: 0}}]}
+      action_id: {from: alert.action, pipe: [{lookup: {map: {allowed: 1, blocked: 2}, default: 0}}]}
+      disposition_id: {from: alert.action, pipe: [{lookup: {map: {allowed: 1, blocked: 2}, default: 0}}]}
+      finding_info.title: alert.signature
+      finding_info.uid: {from: alert.signature_id, pipe: [str]}
+      src_endpoint.ip: {from: src_ip, pipe: [ip]}
+      src_endpoint.port: {from: src_port, pipe: [int, port]}
+      dst_endpoint.ip: {from: dest_ip, pipe: [ip]}
+      dst_endpoint.port: {from: dest_port, pipe: [int, port]}
+      connection_info.protocol_name: {from: proto, pipe: [lower]}
+      device.hostname: host
+  network_activity:
+    set:
+      activity_id: {const: 6}
+      time: {from: timestamp, pipe: [iso8601]}
+      severity_id: {const: 1}
+      src_endpoint.ip: {from: src_ip, pipe: [ip]}
+      src_endpoint.port: {from: src_port, pipe: [int, port]}
+      dst_endpoint.ip: {from: dest_ip, pipe: [ip]}
+      dst_endpoint.port: {from: dest_port, pipe: [int, port]}
+      connection_info.protocol_name: {from: proto, pipe: [lower]}
+      traffic.bytes_out: {from: flow.bytes_toserver, pipe: [int]}
+      traffic.bytes_in: {from: flow.bytes_toclient, pipe: [int]}
+      traffic.packets_out: {from: flow.pkts_toserver, pipe: [int]}
+      traffic.packets_in: {from: flow.pkts_toclient, pipe: [int]}
+      duration: {from: flow.age, pipe: [int, {mul: 1000}]}
+      device.hostname: host
+  base_event:
+    set:
+      time: {from: timestamp, pipe: [iso8601]}
+      severity_id: {const: 1}
+      device.hostname: host
+tests:
+  - name: alert-allowed
+    raw: '{"timestamp":"2026-10-04T13:21:07.123456+0000","flow_id":1234567890,"in_iface":"eth0","event_type":"alert","src_ip":"198.51.100.77","src_port":44444,"dest_ip":"10.1.2.22","dest_port":22,"proto":"TCP","alert":{"action":"allowed","gid":1,"signature_id":2001219,"rev":20,"signature":"ET SCAN Potential SSH Scan","category":"Attempted Information Leak","severity":2},"app_proto":"ssh","host":"suri-01"}'
+    expect:
+      class_uid: 2004
+      type_uid: 200401
+      time: 1791120067123
+      severity_id: 3
+      action_id: 1
+      finding_info.title: ET SCAN Potential SSH Scan
+      finding_info.uid: "2001219"
+      src_endpoint.ip: 198.51.100.77
+      dst_endpoint.port: 22
+      connection_info.protocol_name: tcp
+      device.hostname: suri-01
+      unmapped.alert.category: Attempted Information Leak
+      unmapped.app_proto: ssh
+  - name: alert-blocked-high-severity
+    raw: '{"timestamp":"2026-10-04T13:21:08.000000+0000","flow_id":1,"event_type":"alert","src_ip":"203.0.113.50","src_port":1,"dest_ip":"10.1.2.15","dest_port":80,"proto":"TCP","alert":{"action":"blocked","gid":1,"signature_id":2024897,"rev":3,"signature":"ET MALWARE Possible Win32/Agent Checkin","category":"A Network Trojan was detected","severity":1}}'
+    expect:
+      class_uid: 2004
+      severity_id: 4
+      action_id: 2
+      disposition_id: 2
+      device.hostname: null
+  - name: flow-event
+    raw: '{"timestamp":"2026-10-04T13:21:19.500000+0000","flow_id":99,"in_iface":"eth0","event_type":"flow","src_ip":"10.1.1.15","src_port":51512,"dest_ip":"142.250.77.14","dest_port":443,"proto":"TCP","flow":{"pkts_toserver":14,"pkts_toclient":41,"bytes_toserver":1520,"bytes_toclient":48210,"start":"2026-10-04T13:21:07.500000+0000","end":"2026-10-04T13:21:19.500000+0000","age":12,"state":"closed","reason":"timeout","alerted":false},"host":"suri-01"}'
+    expect:
+      class_uid: 4001
+      activity_id: 6
+      time: 1791120079500
+      traffic.bytes_out: 1520
+      traffic.bytes_in: 48210
+      traffic.packets_in: 41
+      duration: 12000
+      unmapped.flow.state: closed
+  - name: ipv6-and-colon-offset-timestamp
+    raw: '{"timestamp":"2026-10-04T18:51:07.000000+05:30","event_type":"flow","src_ip":"2001:db8::10","src_port":1234,"dest_ip":"2001:db8::20","dest_port":53,"proto":"UDP","flow":{"pkts_toserver":1,"pkts_toclient":1,"bytes_toserver":80,"bytes_toclient":120,"age":0}}'
+    expect:
+      time: 1791120067000
+      src_endpoint.ip: "2001:db8::10"
+      connection_info.protocol_name: udp
+      duration: 0
+  - name: other-event-type-base-event
+    raw: '{"timestamp":"2026-10-04T13:21:07.000000+0000","event_type":"dns","src_ip":"10.1.1.5","src_port":53211,"dest_ip":"10.1.1.1","dest_port":53,"proto":"UDP","dns":{"type":"query","id":4711,"rrname":"www.example.com","rrtype":"A"}}'
+    expect:
+      class_uid: 0
+      time: 1791120067000
+      unmapped.dns.rrname: www.example.com
+      unmapped.src_ip: 10.1.1.5
+  - name: alert-with-missing-optional-fields
+    raw: '{"timestamp":"2026-10-04T13:21:07.000000+0000","event_type":"alert","src_ip":"10.1.1.5","dest_ip":"10.1.1.6","proto":"ICMP","alert":{"signature_id":1,"signature":"Test, with comma"}}'
+    expect:
+      class_uid: 2004
+      finding_info.title: "Test, with comma"
+      src_endpoint.port: null
+      action_id: null
+      severity_id: null

@@ -1,0 +1,145 @@
+# Field-name aliases -> OCSF paths for the Onboarding Studio suggester (docs/onboarding.md).
+# Names are compared after normalisation: lower-case, every non-alphanumeric character removed
+# ("source-address", "Source_Address" and "sourceaddress" are the same name; "id.orig_h" -> "idorigh").
+# `types` lists compatible inferred field types (ip port int float mac timestamp url enum bool text).
+# Extend this file to teach the suggester new vocabulary; no code change needed.
+version: 1
+
+paths:
+  src_endpoint.ip:
+    names: [srcip, src, sip, sourceip, sourceaddress, sourceaddr, saddr, srcaddr, srcaddress, clientip, client, clientaddress, idorigh, origh, srchost, from, fromip, remoteip, remotehost, callerip, srcipaddress, useripaddress, userip, uip, ipaddress, ip]
+    types: [ip]
+  src_endpoint.port:
+    names: [srcport, sport, spt, sourceport, srcp, clientport, idorigp, origp, fromport, remoteport, ipport]
+    types: [port, int]
+  src_endpoint.mac:
+    names: [srcmac, smac, sourcemac, sourcemacaddress, srcmacaddress, clientmac, mac]
+    types: [mac]
+  src_endpoint.interface_name:
+    names: [srcintf, srcinterface, inintf, ininterface, inif, in, ingress, ingressinterface, sif, sourceinterface, interface, iface, rcvintf, packetincominginterface, deviceinboundinterface]
+    types: [enum, text]
+  src_endpoint.hostname:
+    names: [srchostname, sourcehostname, shost, workstationname, clienthostname]
+    types: [text, enum]
+  dst_endpoint.ip:
+    names: [dstip, dst, dip, destip, destinationip, destinationaddress, destinationaddr, daddr, dstaddr, dstaddress, serverip, server, destaddress, idresph, resph, dsthost, to, toip, targetip, destination, dest]
+    types: [ip]
+  dst_endpoint.port:
+    names: [dstport, dport, dpt, destport, destinationport, dstp, serverport, idrespp, respp, toport, targetport]
+    types: [port, int]
+  dst_endpoint.mac:
+    names: [dstmac, dmac, destinationmac, destmac]
+    types: [mac]
+  dst_endpoint.interface_name:
+    names: [dstintf, dstinterface, outintf, outinterface, outif, out, egress, egressinterface, dif, destinationinterface, destinterface, deviceoutboundinterface]
+    types: [enum, text]
+  dst_endpoint.hostname:
+    names: [dsthostname, destinationhostname, dhost, desthostname, computer, computername]
+    types: [text, enum]
+  connection_info.protocol_name:
+    names: [proto, protocol, protocolname, ipprotocol, protoname, transport, l4proto, protocoltext]
+    types: [enum, text]
+  connection_info.protocol_num:
+    names: [protocolid, protonum, protocolnumber, ipprotocolnumber, protoid, protocolcode]
+    types: [int]
+  connection_info.direction_id:
+    names: [chain, direction, dir, trafficdirection, flowdirection]
+    types: [enum]
+  connection_info.uid:
+    names: [connid, connectionid, sessionid, session, flowid, uid, conid, sessionid32]
+    types: [int, text, enum]
+  traffic.bytes:
+    names: [len, length, bytes, size, totalbytes, framelen, packetlen, pktlen, octets, datalen]
+    types: [int]
+  traffic.bytes_out:
+    names: [sentbyte, sentbytes, bytesout, srcbytes, bytessent, origbytes, sentoctets, bytesfromclient, bytestoserver, upbytes, txbytes, outbytes, sent]
+    types: [int]
+  traffic.bytes_in:
+    names: [rcvdbyte, rcvdbytes, recvbytes, receivedbytes, bytesin, dstbytes, bytesreceived, respbytes, bytesfromserver, bytestoclient, downbytes, rxbytes, inbytes, recv]
+    types: [int]
+  traffic.packets_out:
+    names: [sentpkt, sentpkts, sentpackets, packetsout, srcpackets, packetssent, origpkts, packetsfromclient, pkttoserver, pktstoserver, txpackets]
+    types: [int]
+  traffic.packets_in:
+    names: [rcvdpkt, rcvdpkts, recvpkts, receivedpackets, packetsin, dstpackets, packetsreceived, resppkts, packetsfromserver, pktstoclient, rxpackets]
+    types: [int]
+  duration:
+    names: [duration, elapsed, elapsedtime, elapsedms, durationms, sessiontime, connduration, timetaken, age]
+    types: [int, float]
+  action_id:
+    names: [action, act, verdict, disposition, outcome, policyaction, fwaction, firewallaction, decision, status, logsubtype, result]
+    types: [enum]
+  severity_id:
+    names: [severity, sev, level, priority, loglevel, pri, prio, loglevelname, risk]
+    types: [enum]
+  device.hostname:
+    names: [devname, devicename, hostname, host, dvchost, devhost, deviceid, devid, sensor, sensorname, observer, firewall, fwname, node, devicehostname, sysname]
+    types: [text, enum]
+  user.name:
+    names: [user, username, usrname, account, accountname, login, userid, srcuser, suser, targetusername, uname, principal, actor, subjectusername]
+    types: [text, enum]
+  http_request.http_method:
+    names: [method, httpmethod, requestmethod, verb, reqmethod]
+    types: [enum, text]
+  http_request.url.text:
+    names: [url, uri, requesturl, requesturi, urlstring, request, path, cs_uri]
+    types: [url, text]
+  http_response.code:
+    names: [statuscode, httpstatus, httpcode, responsecode, rescode, scstatus, code, httpstatuscode]
+    types: [int]
+  query.hostname:
+    names: [query, qname, queryname, rrname, domain, dnsquery, fqdn, name]
+    types: [text, url]
+  query.type:
+    names: [qtype, querytype, rrtype, recordtype, dnstype]
+    types: [enum, text]
+  finding_info.title:
+    names: [signature, signaturename, alert, alertname, attack, attackname, threat, threatname, rule, rulename, detection, eventname, title]
+    types: [text, enum]
+  finding_info.uid:
+    names: [signatureid, sigid, sid, ruleid, alertid, threatid, detectionid, logid, eventid, id]
+    types: [int, text, enum]
+  status_id:
+    names: [result, outcome, authresult, status, logonresult, success]
+    types: [enum, bool]
+  user.domain:
+    names: [domain, userdomain, targetdomainname, accountdomain, srcdomain]
+    types: [text, enum]
+  message:
+    names: [msg, message, description, desc, text, details]
+    types: [text, enum]
+
+# Value-driven hints: when names are generic (field_3, col_7) the observed *values* decide the role/name.
+value_hints:
+  connection_info.protocol_name: [tcp, udp, icmp, icmpv6, gre, esp, ah, sctp, igmp, ospf]
+  connection_info.direction_id: [input, output, forward, inbound, outbound, in, out, ingress, egress, lateral, prerouting, postrouting]
+  http_request.http_method: [get, post, put, delete, head, options, patch, connect, trace]
+  action_id: [allow, allowed, accept, accepted, permit, permitted, pass, passed, deny, denied, drop, dropped, block, blocked, reject, rejected, discard, close, closed, timeout]
+
+# Enumerations used to generate `lookup` maps. Observed values not listed here are left unmapped (default 0) and
+# reported in the Studio so a human can complete the map.
+enums:
+  action_id:        # OCSF action_id: 1 Allowed, 2 Denied
+    1: [allow, allowed, accept, accepted, permit, permitted, pass, passed, close, closed, timeout, success, ok, established, built, "tcp_hit", detected]
+    2: [deny, denied, drop, dropped, block, blocked, reject, rejected, discard, discarded, refuse, refused, fail, failed, blackhole, reset, "client-rst", "server-rst"]
+  disposition_id:   # OCSF disposition_id: 1 Allowed, 2 Blocked
+    1: [allow, allowed, accept, accepted, permit, permitted, pass, passed, close, closed, timeout, success, ok]
+    2: [deny, denied, drop, dropped, block, blocked, reject, rejected, discard, discarded, refuse, refused]
+  severity_id:      # OCSF severity_id: 1 Informational .. 6 Fatal
+    1: [debug, info, information, informational, notice, notification, low-info]
+    2: [low, warn, warning, minor]
+    3: [medium, moderate, error, err, major]
+    4: [high, alert, severe]
+    5: [critical, crit, veryhigh]
+    6: [fatal, emergency, emerg, panic]
+  status_id:        # OCSF authentication status_id: 1 Success, 2 Failure
+    1: [success, successful, succeeded, ok, accepted, permit, allow, allowed, pass, passed, "true", "yes", logon, login]
+    2: [failure, fail, failed, denied, invalid, rejected, error, unsuccessful, deny, "false", "no", bad]
+  connection_info.direction_id:   # OCSF direction_id: 1 Inbound, 2 Outbound, 3 Lateral
+    1: [input, inbound, in, ingress, prerouting, incoming]
+    2: [output, outbound, out, egress, postrouting, outgoing]
+    3: [forward, lateral, internal]
+
+protocol_numbers: {icmp: 1, igmp: 2, tcp: 6, udp: 17, gre: 47, esp: 50, ah: 51, icmpv6: 58, ospf: 89, sctp: 132}
+
+http_method_activity: {CONNECT: 1, DELETE: 2, GET: 3, HEAD: 4, OPTIONS: 5, POST: 6, PUT: 7, TRACE: 8, PATCH: 9}

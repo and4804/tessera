@@ -1,0 +1,24 @@
+# Profile `siem`: OpenSearch + Dashboards. Use: docker compose -f compose.yml -f compose.siem.yml --profile siem up -d
+# Enable the sink with ULPF sinks.opensearch.enabled=true in configs/ulpf.yaml. Security plugin is disabled ONLY because the
+# network is internal; do not expose these ports. No default credentials exist because there is no auth surface.
+services:
+  opensearch:
+    profiles: [siem]
+    image: opensearchproject/opensearch:2.15.0
+    environment: {discovery.type: single-node, DISABLE_SECURITY_PLUGIN: "true", OPENSEARCH_JAVA_OPTS: "-Xms1g -Xmx1g", DISABLE_INSTALL_DEMO_CONFIG: "true"}
+    networks: [internal]
+    volumes: [opensearch-data:/usr/share/opensearch/data]
+    healthcheck: {test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"], interval: 15s, timeout: 5s, retries: 20}
+    restart: unless-stopped
+  dashboards:
+    profiles: [siem]
+    image: opensearchproject/opensearch-dashboards:2.15.0
+    environment: {OPENSEARCH_HOSTS: '["http://opensearch:9200"]', DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"}
+    networks: [internal]
+    depends_on: {opensearch: {condition: service_healthy}}
+    restart: unless-stopped
+  gateway:                                    # Docker cannot publish from the internal network: forward 5601 through the gateway
+    command: ["tcp:8080=api:8080", "tcp:5140=ingest:5140", "udp:5140=ingest:5140", "tcp:5601=dashboards:5601"]
+    ports: ["127.0.0.1:5601:5601"]
+volumes:
+  opensearch-data:

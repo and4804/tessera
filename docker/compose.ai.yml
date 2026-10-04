@@ -1,0 +1,11 @@
+# Profile `ai`: local Ollama for the OPTIONAL onboarding assist (R6; off unless onboard.llm.enabled=true).
+# Models are loaded from the volume; pre-seed it on the online build machine (`ollama pull <model>`) and ship it in the bundle.
+services:
+  ollama:
+    profiles: [ai]
+    image: ollama/ollama:latest
+    networks: [internal]
+    volumes: [ollama-models:/root/.ollama]
+    restart: unless-stopped
+volumes:
+  ollama-models:

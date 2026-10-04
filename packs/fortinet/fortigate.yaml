@@ -1,0 +1,152 @@
+pack: 1
+id: fortinet.fortigate
+version: 1.0.0
+verified: false            # R12: illustrative sample logs; a human must verify against vendor docs / real captures
+meta: {vendor: Fortinet, product: FortiGate, category: firewall}
+match:
+  priority: 50
+  all:
+    - contains: 'devname='
+    - contains: 'logid='
+framing: syslog
+extract:
+  kind: kv
+  options: {pair_sep: " ", kv_sep: "=", quote: '"'}
+select:
+  - when: {field: type, eq: traffic}
+    class: network_activity
+  - when: {field: type, eq: utm}
+    class: detection_finding
+  - otherwise: base_event
+classes:
+  network_activity:
+    set:
+      activity_id: {const: 6}                       # Traffic
+      time:
+        coalesce:
+          - {from: eventtime, pipe: [int, epoch_ns]}
+          - {from: [date, time], pipe: [{concat: " "}, {strptime: {fmt: "%Y-%m-%d %H:%M:%S", tz_from: tz}}]}
+      severity_id:
+        from: level
+        pipe: [{lookup: {map: {debug: 1, information: 1, notice: 1, warning: 2, error: 3, alert: 4, critical: 5, emergency: 6}, default: 0}}]
+      action_id:
+        from: action
+        pipe: [{lookup: {map: {accept: 1, close: 1, timeout: 1, deny: 2, "client-rst": 2, "server-rst": 2}, default: 0}}]
+      disposition_id:
+        from: action
+        pipe: [{lookup: {map: {accept: 1, close: 1, deny: 2}, default: 0}}]
+      src_endpoint.ip: {from: srcip, pipe: [ip]}
+      src_endpoint.port: {from: srcport, pipe: [int, port]}
+      src_endpoint.interface_name: srcintf
+      dst_endpoint.ip: {from: dstip, pipe: [ip]}
+      dst_endpoint.port: {from: dstport, pipe: [int, port]}
+      dst_endpoint.interface_name: dstintf
+      connection_info.protocol_num: {from: proto, pipe: [int]}
+      connection_info.protocol_name: {from: proto, pipe: [int, proto_name]}
+      traffic.bytes_out: {from: sentbyte, pipe: [int]}
+      traffic.bytes_in: {from: rcvdbyte, pipe: [int]}
+      traffic.packets_out: {from: sentpkt, pipe: [int]}
+      traffic.packets_in: {from: rcvdpkt, pipe: [int]}
+      duration: {from: duration, pipe: [int, {mul: 1000}]}
+      device.hostname: devname
+      metadata.original_time: {from: [date, time], pipe: [{concat: " "}]}
+  detection_finding:
+    set:
+      activity_id: {const: 1}
+      time:
+        coalesce:
+          - {from: eventtime, pipe: [int, epoch_ns]}
+          - {from: [date, time], pipe: [{concat: " "}, {strptime: {fmt: "%Y-%m-%d %H:%M:%S", tz_from: tz}}]}
+      severity_id:
+        from: level
+        pipe: [{lookup: {map: {debug: 1, information: 1, notice: 1, warning: 2, error: 3, alert: 4, critical: 5, emergency: 6}, default: 0}}]
+      finding_info.title: {coalesce: [attack, msg, subtype]}
+      finding_info.uid: {from: logid}
+      src_endpoint.ip: {from: srcip, pipe: [ip]}
+      dst_endpoint.ip: {from: dstip, pipe: [ip]}
+      device.hostname: devname
+  base_event:
+    set:
+      time: {from: eventtime, pipe: [int, epoch_ns]}
+      severity_id:
+        from: level
+        pipe: [{lookup: {map: {debug: 1, information: 1, notice: 1, warning: 2, error: 3, alert: 4, critical: 5, emergency: 6}, default: 0}}]
+      message: {coalesce: [msg, logdesc]}
+      device.hostname: devname
+tests:
+  - name: traffic-accept
+    raw: '<189>date=2026-10-04 time=13:21:07 devname="FGT-HQ" devid="FGT60F0000000001" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" eventtime=1790000467000000000 tz="+0530" srcip=10.1.1.15 srcport=51512 srcintf="lan" dstip=142.250.77.14 dstport=443 dstintf="wan1" proto=6 action="accept" policyid=3 service="HTTPS" duration=12 sentbyte=1520 rcvdbyte=48210 sentpkt=14 rcvdpkt=41'
+    expect:
+      class_uid: 4001
+      type_uid: 400106
+      time: 1790000467000
+      severity_id: 1
+      action_id: 1
+      src_endpoint.ip: 10.1.1.15
+      src_endpoint.port: 51512
+      dst_endpoint.ip: 142.250.77.14
+      dst_endpoint.port: 443
+      connection_info.protocol_name: tcp
+      traffic.bytes_in: 48210
+      traffic.bytes_out: 1520
+      duration: 12000
+      device.hostname: FGT-HQ
+      metadata.original_time: "2026-10-04 13:21:07"
+      unmapped.policyid: "3"
+  - name: traffic-deny-without-counters
+    raw: '<188>date=2026-10-04 time=13:21:09 devname="FGT-HQ" devid="FGT60F0000000001" logid="0000000011" type="traffic" subtype="forward" level="warning" vd="root" eventtime=1790000469500000000 tz="+0530" srcip=203.0.113.50 srcport=40000 srcintf="wan1" dstip=10.1.2.15 dstport=22 dstintf="dmz" proto=6 action="deny" policyid=0 service="SSH"'
+    expect:
+      class_uid: 4001
+      time: 1790000469500
+      severity_id: 2
+      action_id: 2
+      disposition_id: 2
+      src_endpoint.ip: 203.0.113.50
+      dst_endpoint.port: 22
+      traffic.bytes_in: null
+      duration: null
+  - name: utm-anomaly-detection
+    raw: '<188>date=2026-10-04 time=13:30:00 devname="FGT-HQ" devid="FGT60F0000000001" logid="0720018432" type="utm" subtype="anomaly" eventtype="anomaly" level="alert" vd="root" eventtime=1790001000000000000 tz="+0530" severity="critical" srcip=203.0.113.50 dstip=10.1.2.15 srcintf="wan1" dstintf="dmz" sessionid=0 action="detected" proto=6 service="tcp" attack="tcp_port_scan" count=1 msg="anomaly: tcp_port_scan, 1 > threshold 1"'
+    expect:
+      class_uid: 2004
+      type_uid: 200401
+      severity_id: 4
+      time: 1790001000000
+      finding_info.title: tcp_port_scan
+      finding_info.uid: "0720018432"
+      src_endpoint.ip: 203.0.113.50
+      unmapped.severity: critical
+  - name: quoted-value-with-spaces-and-escaped-quote
+    raw: '<188>date=2026-10-04 time=13:31:00 devname="FGT HQ 2" devid="FGT60F0000000002" logid="0419016384" type="utm" subtype="ips" level="alert" vd="root" eventtime=1790001060000000000 tz="+0530" srcip=198.51.100.9 dstip=10.1.2.20 msg="Hello \"world\" blocked by policy"'
+    expect:
+      class_uid: 2004
+      finding_info.title: 'Hello "world" blocked by policy'
+      device.hostname: FGT HQ 2
+  - name: no-eventtime-falls-back-to-date-time-and-tz
+    raw: '<189>date=2026-10-04 time=13:21:07 devname="FGT-HQ" devid="FGT60F0000000001" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" tz="+0530" srcip=10.1.1.15 srcport=51512 dstip=142.250.77.14 dstport=443 proto=17 action="accept" policyid=3'
+    expect:
+      class_uid: 4001
+      time: 1791100267000
+      connection_info.protocol_name: udp
+  - name: ipv6-addresses
+    raw: '<189>date=2026-10-04 time=13:21:07 devname="FGT-HQ" devid="FGT60F0000000001" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" eventtime=1790000467000000000 tz="+0530" srcip=2001:db8::1 srcport=5000 dstip=2001:db8:0:1::2 dstport=443 proto=6 action="close" policyid=1'
+    expect:
+      src_endpoint.ip: "2001:db8::1"
+      dst_endpoint.ip: "2001:db8:0:1::2"
+      action_id: 1
+  - name: invalid-ip-and-port-are-not-mapped
+    raw: '<189>date=2026-10-04 time=13:21:07 devname="FGT-HQ" devid="FGT60F0000000001" logid="0000000013" type="traffic" subtype="forward" level="notice" vd="root" eventtime=1790000467000000000 tz="+0530" srcip=999.1.1.1 srcport=70000 dstip=142.250.77.14 dstport=443 proto=6 action="accept" policyid=3'
+    expect:
+      class_uid: 4001
+      src_endpoint.ip: null
+      src_endpoint.port: null
+      dst_endpoint.ip: 142.250.77.14
+      unmapped.srcip: 999.1.1.1
+  - name: event-log-goes-to-base-event
+    raw: '<185>date=2026-10-04 time=13:40:00 devname="FGT-HQ" devid="FGT60F0000000001" logid="0100032001" type="event" subtype="system" level="information" vd="root" eventtime=1790001600000000000 tz="+0530" logdesc="Admin login successful" user="admin" ui="https(10.1.1.5)" action="login" status="success" msg="Administrator admin logged in successfully from https(10.1.1.5)"'
+    expect:
+      class_uid: 0
+      time: 1790001600000
+      severity_id: 1
+      message: Administrator admin logged in successfully from https(10.1.1.5)
+      unmapped.user: admin

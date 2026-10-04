@@ -1,0 +1,86 @@
+pack: 1
+id: cef.generic_firewall
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: Generic, product: CEF firewall, category: firewall}
+match:
+  priority: 30             # vendor-specific packs (priority 50) win over this generic one
+  all:
+    - contains: 'CEF:'
+framing: syslog            # header optional: bare "CEF:0|..." lines work too
+extract:
+  kind: cef
+  options: {}
+select:
+  - otherwise: network_activity
+classes:
+  network_activity:
+    set:
+      activity_id: {const: 6}
+      # CEF `rt` = receipt time, epoch milliseconds.
+      time: {from: rt, pipe: [int, epoch_ms]}
+      # CEF severity 0-10 -> OCSF: 0-3 Low(2), 4-6 Medium(3), 7-8 High(4), 9-10 Very-High(5)
+      severity_id: {from: cef.severity, pipe: [{lookup: {map: {"0": 2, "1": 2, "2": 2, "3": 2, "4": 3, "5": 3, "6": 3, "7": 4, "8": 4, "9": 5, "10": 5}, default: 0}}]}
+      action_id: {from: act, pipe: [lower, {lookup: {map: {allow: 1, permit: 1, accept: 1, allowed: 1, deny: 2, drop: 2, block: 2, reject: 2, denied: 2}, default: 0}}]}
+      disposition_id: {from: act, pipe: [lower, {lookup: {map: {allow: 1, permit: 1, accept: 1, allowed: 1, deny: 2, drop: 2, block: 2, reject: 2, denied: 2}, default: 0}}]}
+      src_endpoint.ip: {from: src, pipe: [ip]}
+      src_endpoint.port: {from: spt, pipe: [int, port]}
+      src_endpoint.interface_name: deviceInboundInterface
+      dst_endpoint.ip: {from: dst, pipe: [ip]}
+      dst_endpoint.port: {from: dpt, pipe: [int, port]}
+      dst_endpoint.interface_name: deviceOutboundInterface
+      connection_info.protocol_name: {from: proto, pipe: [lower]}
+      # CEF `in`/`out` are defined relative to the source->destination direction: `in` = bytes src->dst.
+      traffic.bytes_out: {from: in, pipe: [int]}
+      traffic.bytes_in: {from: out, pipe: [int]}
+      device.hostname: dvchost
+tests:
+  - name: allowed-with-syslog-header
+    raw: '<134>Oct  4 13:21:07 FW-CEF1 CEF:0|Acme|NetFW|2.1|100|Traffic Allowed|3|rt=1791120067000 src=10.1.1.198 spt=42552 dst=151.101.1.69 dpt=443 proto=TCP act=allow deviceInboundInterface=lan deviceOutboundInterface=wan dvchost=FW-CEF1 app=HTTPS in=14168 out=31020 cnt=1'
+    expect:
+      class_uid: 4001
+      time: 1791120067000
+      severity_id: 2
+      action_id: 1
+      src_endpoint.ip: 10.1.1.198
+      src_endpoint.port: 42552
+      dst_endpoint.port: 443
+      src_endpoint.interface_name: lan
+      connection_info.protocol_name: tcp
+      traffic.bytes_out: 14168
+      traffic.bytes_in: 31020
+      device.hostname: FW-CEF1
+      unmapped.app: HTTPS
+      unmapped.cnt: "1"
+  - name: denied-high-severity
+    raw: '<134>Oct  4 13:21:08 FW-CEF1 CEF:0|Acme|NetFW|2.1|101|Traffic Denied|8|rt=1791120068000 src=203.0.113.50 spt=40000 dst=10.1.2.15 dpt=22 proto=TCP act=deny dvchost=FW-CEF1'
+    expect:
+      severity_id: 4
+      action_id: 2
+      disposition_id: 2
+      traffic.bytes_out: null
+  - name: bare-cef-no-syslog-header
+    raw: 'CEF:0|Acme|NetFW|2.1|100|Traffic Allowed|3|rt=1791120067000 src=10.1.1.5 spt=1000 dst=10.1.1.6 dpt=80 proto=UDP act=permit'
+    expect:
+      class_uid: 4001
+      action_id: 1
+      connection_info.protocol_name: udp
+      device.hostname: null
+  - name: escaped-pipe-in-header-and-equals-in-value
+    raw: 'CEF:0|Ac\|me|Net\\FW|2.1|100|Allowed \| logged|3|rt=1791120067000 src=10.1.1.5 dst=10.1.1.6 dpt=80 proto=TCP act=allow msg=user\=bob logged in app=web'
+    expect:
+      class_uid: 4001
+      dst_endpoint.port: 80
+      unmapped.msg: "user=bob logged in"
+      unmapped.app: web
+  - name: extension-value-with-spaces
+    raw: '<134>Oct  4 13:21:07 FW-CEF1 CEF:0|Acme|NetFW|2.1|100|Traffic Allowed|3|rt=1791120067000 src=10.1.1.5 dst=10.1.1.6 proto=TCP act=allow msg=Connection closed by peer after timeout dvchost=FW-CEF1'
+    expect:
+      unmapped.msg: Connection closed by peer after timeout
+      device.hostname: FW-CEF1
+  - name: unknown-action-and-bad-ip
+    raw: 'CEF:0|Acme|NetFW|2.1|100|X|11|rt=1791120067000 src=not-an-ip dst=10.1.1.6 proto=TCP act=quarantine'
+    expect:
+      src_endpoint.ip: null
+      action_id: 0
+      severity_id: 0

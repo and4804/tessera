@@ -1,0 +1,64 @@
+# ULPF default profile: redis + api + ingest + worker. All services sit on an `internal: true` network (no egress, no DNS
+# to the outside). Docker will not publish ports of a container that is only on an internal network, so a tiny `gateway` container
+# (docker/fwd.py, stdlib port forwarder) sits on `internal` + `edge` and publishes 8080 (UI/API, loopback by default) and syslog 5140.
+# Remove the 5140 lines from `gateway` for a node that takes no syslog.
+name: ulpf
+x-ulpf: &ulpf
+  image: ulpf:${ULPF_VERSION:-dev}
+  build: {context: .., dockerfile: docker/Dockerfile}
+  restart: unless-stopped
+  environment: &env
+    ULPF_CONFIG: /app/configs/ulpf.yaml
+  networks: [internal]
+  depends_on: {redis: {condition: service_healthy}}
+  volumes:
+    - ulpf-data:/data
+    - ../secrets:/run/secrets:ro        # ed25519 signing key, optional TLS cert/key; no defaults are baked into the image
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--protected-mode", "no"]   # internal-only network; not published
+    networks: [internal]
+    volumes: [redis-data:/data]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 10}
+    restart: unless-stopped
+  api:
+    <<: *ulpf
+    command: ["run", "--role", "api"]
+  ingest:
+    <<: *ulpf
+    command: ["run", "--role", "ingest"]
+    healthcheck: {test: ["CMD", "python", "-c", "import socket;socket.create_connection(('127.0.0.1',5140),2)"], interval: 15s, timeout: 3s, retries: 5}
+  worker:
+    <<: *ulpf
+    command: ["run", "--role", "worker"]      # scale with: docker compose up --scale worker=4
+    healthcheck: {disable: true}              # the image HEALTHCHECK probes the API port, which workers do not serve
+
+  gateway:                                    # the only container with a route out of the internal network, and it only forwards
+    <<: *ulpf
+    entrypoint: ["python", "/app/fwd.py"]
+    command: ["tcp:8080=api:8080", "tcp:5140=ingest:5140", "udp:5140=ingest:5140"]
+    networks: [internal, edge]
+    depends_on: {api: {condition: service_healthy}, ingest: {condition: service_healthy}}
+    volumes: []
+    healthcheck: {test: ["CMD", "python", "-c", "import socket;socket.create_connection(('127.0.0.1',8080),2)"], interval: 15s, timeout: 3s, retries: 5}
+    ports:
+      - "${ULPF_UI_BIND:-127.0.0.1}:8080:8080"
+      - "${ULPF_SYSLOG_BIND:-127.0.0.1}:5140:5140/udp"
+      - "${ULPF_SYSLOG_BIND:-127.0.0.1}:5140:5140/tcp"
+
+networks:
+  internal:
+    driver: bridge
+    internal: true                            # no route out, no DNS out; Docker cannot publish ports from here
+  edge:
+    driver: bridge                            # gateway only: carries the published ports
+
+volumes:
+  ulpf-data:
+  redis-data:

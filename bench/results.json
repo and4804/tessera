@@ -1,0 +1,100 @@
+{
+  "generated_at": 1791133538358,
+  "hardware": {
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cores": 2,
+    "ram_gb": 7.8,
+    "os": "Linux-6.18.44-fc-v64-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "config": {
+    "mix": "fortigate:30,asa:20,suricata:15,cef:10,pfsense:15,squid:10",
+    "duration_s": 29.5,
+    "events": 200000,
+    "workers_list": [
+      1,
+      2,
+      4
+    ],
+    "partitions": 16,
+    "seed": 1,
+    "method": "pre-published corpus, ledger slope 10-90%, static partitions, 40 simulated devices per format, real Redis Streams bus, vault fsync per block, Parquet+tail sinks",
+    "latency_at_eps": 3392.2
+  },
+  "sustained": {
+    "eps": 14588.0,
+    "per_worker_eps": 3647.0,
+    "projected_daily_events": 1260403200
+  },
+  "scaling": [
+    {
+      "workers": 1,
+      "eps": 6784.4
+    },
+    {
+      "workers": 2,
+      "eps": 13329.0
+    },
+    {
+      "workers": 4,
+      "eps": 14588.0
+    }
+  ],
+  "resources": {
+    "cpu_pct": 179.3,
+    "rss_mb": 665.1
+  },
+  "vault": {
+    "compression_ratio": 2.79
+  },
+  "lake": {
+    "bytes_per_event": 216.9
+  },
+  "ledger": {
+    "ingested": 200000,
+    "lost": 0,
+    "conserved": true
+  },
+  "parse_rate": 1.0,
+  "runs": [
+    {
+      "workers": 1,
+      "eps": 6784.4,
+      "wall_eps": 6857.4,
+      "events": 200000,
+      "cpu_pct": 82.0,
+      "rss_mb": 155.9,
+      "vault_bytes": 20677853,
+      "lake_bytes": 48121854,
+      "raw_bytes": 57538438
+    },
+    {
+      "workers": 2,
+      "eps": 13329.0,
+      "wall_eps": 12393.2,
+      "events": 200000,
+      "cpu_pct": 140.3,
+      "rss_mb": 311.9,
+      "vault_bytes": 20603272,
+      "lake_bytes": 45427439,
+      "raw_bytes": 57538438
+    },
+    {
+      "workers": 4,
+      "eps": 14588.0,
+      "wall_eps": 15496.3,
+      "events": 200000,
+      "cpu_pct": 179.3,
+      "rss_mb": 665.1,
+      "vault_bytes": 20597887,
+      "lake_bytes": 43388269,
+      "raw_bytes": 57538438
+    }
+  ],
+  "latency_ms": {
+    "p50": 25.4,
+    "p95": 56.6,
+    "p99": 94.6,
+    "max": 168.4
+  }
+}

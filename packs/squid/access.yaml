@@ -1,0 +1,87 @@
+pack: 1
+id: squid.access
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: Squid, product: Squid access.log (native format), category: proxy}
+match:
+  priority: 50
+  all:
+    - regex: '^\d{9,10}\.\d{3}\s'
+framing: none
+extract:
+  kind: regex
+  options:
+    # <time> <elapsed> <client> <result>/<status> <bytes> <method> <url> <user> <hier>/<peer> <mime>   ("-" => group not captured)
+    anchor: '^(?P<ts>\d+\.\d{3})\s+(?P<elapsed>\d+)\s+(?P<client>\S+)\s+(?P<result>[A-Z_]+)/(?P<status>\d{3})\s+(?P<bytes>\d+)\s+(?P<method>[A-Za-z_]+)\s+(?P<url>\S+)\s+(?:-|(?P<user>\S+))\s+(?P<hier>[A-Z_]+)/(?:-|(?P<peer>\S+))\s+(?:-|(?P<mime>\S+))\s*$'
+select:
+  - otherwise: http_activity
+classes:
+  http_activity:
+    set:
+      activity_id: {from: method, pipe: [upper, {lookup: {map: {CONNECT: 1, DELETE: 2, GET: 3, HEAD: 4, OPTIONS: 5, POST: 6, PUT: 7, TRACE: 8, PATCH: 9}, default: 99}}]}
+      time: {from: ts, pipe: [float, epoch_s]}
+      severity_id: {const: 1}
+      action_id: {from: result, pipe: [{lookup: {map: {TCP_DENIED: 2, TCP_DENIED_REPLY: 2}, default: 1}}]}
+      disposition_id: {from: result, pipe: [{lookup: {map: {TCP_DENIED: 2, TCP_DENIED_REPLY: 2}, default: 1}}]}
+      src_endpoint.ip: {from: client, pipe: [ip]}
+      dst_endpoint.ip: {from: peer, pipe: [ip]}
+      http_request.http_method: method
+      http_request.url.text: url
+      http_response.code: {from: status, pipe: [int]}
+      traffic.bytes_in: {from: bytes, pipe: [int]}
+      duration: {from: elapsed, pipe: [int]}
+      actor.user.name: user
+tests:
+  - name: get-miss-with-user
+    raw: '1790000467.123    145 10.1.1.15 TCP_MISS/200 12345 GET http://www.example.com/index.html alice HIER_DIRECT/93.184.216.34 text/html'
+    expect:
+      class_uid: 4002
+      type_uid: 400203
+      activity_id: 3
+      time: 1790000467123
+      severity_id: 1
+      action_id: 1
+      src_endpoint.ip: 10.1.1.15
+      dst_endpoint.ip: 93.184.216.34
+      http_request.http_method: GET
+      http_request.url.text: http://www.example.com/index.html
+      http_response.code: 200
+      traffic.bytes_in: 12345
+      duration: 145
+      actor.user.name: alice
+      unmapped.mime: text/html
+      unmapped.hier: HIER_DIRECT
+  - name: connect-tunnel-no-user-no-mime
+    raw: '1790000468.000   2000 10.1.1.20 TCP_TUNNEL/200 5123 CONNECT www.example.com:443 - HIER_DIRECT/93.184.216.34 -'
+    expect:
+      activity_id: 1
+      http_request.url.text: www.example.com:443
+      actor.user.name: null
+      unmapped.mime: null
+  - name: denied-no-peer
+    raw: '1790000469.500      0 10.1.1.21 TCP_DENIED/403 3800 GET http://bad.example.net/x?a=1&b=2 bob HIER_NONE/- text/html'
+    expect:
+      action_id: 2
+      disposition_id: 2
+      http_response.code: 403
+      dst_endpoint.ip: null
+      http_request.url.text: http://bad.example.net/x?a=1&b=2
+  - name: cache-hit-post-and-unknown-method
+    raw: '1790000470.001     12 10.1.1.22 TCP_HIT/304 210 PURGE http://cdn.example.net/a.js carol HIER_NONE/- application/javascript'
+    expect:
+      activity_id: 99
+      action_id: 1
+      http_response.code: 304
+  - name: ipv6-client-and-peer
+    raw: '1790000471.250    300 2001:db8::15 TCP_MISS/200 900 POST http://api.example.com/v1 - HIER_DIRECT/2001:db8:1::80 application/json'
+    expect:
+      activity_id: 6
+      src_endpoint.ip: "2001:db8::15"
+      dst_endpoint.ip: "2001:db8:1::80"
+  - name: url-with-spaces-encoded-and-long-numbers
+    raw: '1790000472.999 123456 10.1.1.23 TCP_MISS_ABORTED/000 0 GET http://example.com/a%20b - HIER_DIRECT/93.184.216.34 -'
+    expect:
+      http_response.code: 0
+      duration: 123456
+      traffic.bytes_in: 0
+      time: 1790000472999

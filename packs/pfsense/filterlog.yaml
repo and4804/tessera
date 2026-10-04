@@ -1,0 +1,113 @@
+pack: 1
+id: pfsense.filterlog
+version: 1.0.0
+verified: false            # R12: field order per pfSense docs as remembered; verify against the pfSense filterlog documentation
+meta: {vendor: Netgate, product: pfSense filterlog, category: firewall}
+match:
+  priority: 50
+  all:
+    - contains: 'filterlog'
+framing: syslog
+extract:
+  kind: csv
+  options:
+    sep: ","
+    columns: [rule, subrule, anchor, tracker, interface, reason, action, direction, ip_version]
+    branch:
+      field: ip_version
+      cases:
+        "4":
+          columns: [tos, ecn, ttl, id, offset, ipflags, protocol_id, protocol, length, src, dst]
+          branch: &l4
+            field: protocol
+            cases:
+              tcp: {columns: [srcport, dstport, datalen, tcpflags, seq, ack, window, urg, options]}
+              udp: {columns: [srcport, dstport, datalen]}
+              icmp: {columns: [icmp_type, icmp_a, icmp_b, icmp_c]}
+            default: {columns: []}
+        "6":
+          columns: [class, flow_label, hop_limit, protocol, protocol_id, length, src, dst]
+          branch: *l4
+select:
+  - otherwise: network_activity
+classes:
+  network_activity:
+    set:
+      activity_id: {const: 6}
+      time: {from: syslog.ts, pipe: [iso8601]}
+      severity_id: {from: action, pipe: [{lookup: {map: {pass: 1, block: 2, reject: 2}, default: 0}}]}
+      action_id: {from: action, pipe: [{lookup: {map: {pass: 1, block: 2, reject: 2}, default: 0}}]}
+      disposition_id: {from: action, pipe: [{lookup: {map: {pass: 1, block: 2, reject: 2}, default: 0}}]}
+      src_endpoint.ip: {from: src, pipe: [ip]}
+      src_endpoint.port: {from: srcport, pipe: [int, port]}
+      src_endpoint.interface_name: {when: {field: direction, eq: in}, then: interface}
+      dst_endpoint.ip: {from: dst, pipe: [ip]}
+      dst_endpoint.port: {from: dstport, pipe: [int, port]}
+      dst_endpoint.interface_name: {when: {field: direction, eq: out}, then: interface}
+      connection_info.protocol_num: {from: protocol_id, pipe: [int]}
+      connection_info.protocol_name: {from: protocol, pipe: [lower]}
+      device.hostname: syslog.host
+tests:
+  - name: ipv4-tcp-block-rfc5424
+    raw: '<134>1 2026-10-04T13:21:07+00:00 pfSense.corp.local filterlog 85432 - - 5,,,1000000103,igb0,match,block,in,4,0x0,,64,12345,0,none,6,tcp,60,198.51.100.77,10.0.0.5,44444,22,0,S,1048576,,64240,,mss;sackOK;TS;nop;wscale'
+    expect:
+      class_uid: 4001
+      time: 1791120067000
+      severity_id: 2
+      action_id: 2
+      disposition_id: 2
+      src_endpoint.ip: 198.51.100.77
+      src_endpoint.port: 44444
+      src_endpoint.interface_name: igb0
+      dst_endpoint.ip: 10.0.0.5
+      dst_endpoint.port: 22
+      dst_endpoint.interface_name: null
+      connection_info.protocol_num: 6
+      connection_info.protocol_name: tcp
+      device.hostname: pfSense.corp.local
+      unmapped.tracker: "1000000103"
+      unmapped.tcpflags: S
+      unmapped.length: "60"
+  - name: ipv4-udp-pass
+    raw: '<134>1 2026-10-04T13:21:08+00:00 pfSense.corp.local filterlog 85432 - - 12,,,1000000105,igb1,match,pass,in,4,0x0,,64,5678,0,none,17,udp,76,10.1.1.5,8.8.8.8,53211,53,56'
+    expect:
+      action_id: 1
+      severity_id: 1
+      src_endpoint.interface_name: igb1
+      connection_info.protocol_name: udp
+      connection_info.protocol_num: 17
+      dst_endpoint.port: 53
+      unmapped.datalen: "56"
+  - name: ipv6-tcp
+    raw: '<134>1 2026-10-04T13:21:09+00:00 pfSense.corp.local filterlog 85432 - - 7,,,1000000110,igb0,match,block,in,6,0x00,0x00000,64,tcp,6,40,2001:db8::bad,2001:db8::5,50000,443,0,S,3000000000,,65535,,mss'
+    expect:
+      src_endpoint.ip: "2001:db8::bad"
+      dst_endpoint.ip: "2001:db8::5"
+      src_endpoint.port: 50000
+      dst_endpoint.port: 443
+      connection_info.protocol_num: 6
+      connection_info.protocol_name: tcp
+      unmapped.hop_limit: "64"
+  - name: ipv4-icmp-no-ports
+    raw: '<134>1 2026-10-04T13:21:10+00:00 pfSense.corp.local filterlog 85432 - - 5,,,1000000103,igb0,match,block,in,4,0x0,,64,1,0,none,1,icmp,84,203.0.113.50,10.0.0.5,request,1234,1'
+    expect:
+      connection_info.protocol_name: icmp
+      src_endpoint.ip: 203.0.113.50
+      src_endpoint.port: null
+      dst_endpoint.port: null
+      unmapped.icmp_type: request
+  - name: rfc3164-header-outbound-direction
+    raw: '<134>Oct  4 13:21:07 filterlog[85432]: 9,,,1000000200,igb1,match,pass,out,4,0x0,,64,99,0,DF,6,tcp,52,10.0.0.5,93.184.216.34,40000,443,0,S,1,,65535,,mss'
+    expect:
+      class_uid: 4001
+      src_endpoint.interface_name: null
+      dst_endpoint.interface_name: igb1
+      action_id: 1
+      dst_endpoint.port: 443
+  - name: truncated-line-still-yields-partial-fields
+    raw: '<134>1 2026-10-04T13:21:07+00:00 pfSense.corp.local filterlog 85432 - - 5,,,1000000103,igb0,match,block,in,4,0x0,,64,12345,0,none,6,tcp,60,198.51.100.77,10.0.0.5'
+    expect:
+      src_endpoint.ip: 198.51.100.77
+      dst_endpoint.ip: 10.0.0.5
+      src_endpoint.port: null
+      action_id: 2

@@ -1,0 +1,75 @@
+pack: 1
+id: leef.generic
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: Generic, product: LEEF firewall, category: firewall}
+match:
+  priority: 30
+  all:
+    - contains: 'LEEF:'
+framing: syslog
+extract:
+  kind: leef
+  options: {}
+select:
+  - otherwise: network_activity
+classes:
+  network_activity:
+    set:
+      activity_id: {const: 6}
+      time: {from: devTime, pipe: [int, epoch_ms]}
+      severity_id: {from: sev, pipe: [{lookup: {map: {"0": 2, "1": 2, "2": 2, "3": 2, "4": 3, "5": 3, "6": 3, "7": 4, "8": 4, "9": 5, "10": 5}, default: 0}}]}
+      action_id: {from: action, pipe: [lower, {lookup: {map: {allow: 1, permit: 1, accept: 1, deny: 2, drop: 2, block: 2, reject: 2}, default: 0}}]}
+      disposition_id: {from: action, pipe: [lower, {lookup: {map: {allow: 1, permit: 1, accept: 1, deny: 2, drop: 2, block: 2, reject: 2}, default: 0}}]}
+      src_endpoint.ip: {from: src, pipe: [ip]}
+      src_endpoint.port: {from: srcPort, pipe: [int, port]}
+      dst_endpoint.ip: {from: dst, pipe: [ip]}
+      dst_endpoint.port: {from: dstPort, pipe: [int, port]}
+      connection_info.protocol_name: {from: proto, pipe: [lower]}
+      traffic.bytes_out: {from: srcBytes, pipe: [int]}
+      traffic.bytes_in: {from: dstBytes, pipe: [int]}
+      traffic.packets_out: {from: srcPackets, pipe: [int]}
+      traffic.packets_in: {from: dstPackets, pipe: [int]}
+      device.hostname: devName
+tests:
+  - name: leef2-caret-delimiter-allow
+    raw: '<134>Oct  4 13:21:07 FW-LEEF1 LEEF:2.0|Acme|NetFW|2.1|FwAllow|^|devTime=1791120067000^devName=FW-LEEF1^src=10.1.1.5^dst=142.250.77.14^srcPort=51512^dstPort=443^proto=TCP^action=allow^sev=2^srcBytes=1520^dstBytes=48210^srcPackets=14^dstPackets=41'
+    expect:
+      class_uid: 4001
+      time: 1791120067000
+      severity_id: 2
+      action_id: 1
+      src_endpoint.ip: 10.1.1.5
+      src_endpoint.port: 51512
+      dst_endpoint.port: 443
+      connection_info.protocol_name: tcp
+      traffic.bytes_out: 1520
+      traffic.bytes_in: 48210
+      traffic.packets_in: 41
+      device.hostname: FW-LEEF1
+  - name: leef2-deny-without-counters
+    raw: 'LEEF:2.0|Acme|NetFW|2.1|FwDeny|^|devTime=1791120068000^src=203.0.113.50^dst=10.1.2.15^srcPort=40000^dstPort=22^proto=TCP^action=deny^sev=6'
+    expect:
+      action_id: 2
+      disposition_id: 2
+      severity_id: 3
+      traffic.bytes_out: null
+      device.hostname: null
+  - name: leef1-tab-delimiter
+    raw: "LEEF:1.0|Acme|NetFW|2.1|FwAllow|devTime=1791120067000\tsrc=10.1.1.5\tdst=10.1.1.6\tsrcPort=1000\tdstPort=80\tproto=UDP\taction=permit"
+    expect:
+      class_uid: 4001
+      action_id: 1
+      connection_info.protocol_name: udp
+  - name: leef2-custom-delimiter-pipe-free-value-with-spaces
+    raw: 'LEEF:2.0|Acme|NetFW|2.1|FwAllow|;|devTime=1791120067000;src=10.1.1.5;dst=10.1.1.6;proto=TCP;action=allow;usrName=Alice Smith;msg=hello world'
+    expect:
+      src_endpoint.ip: 10.1.1.5
+      unmapped.usrName: Alice Smith
+      unmapped.msg: hello world
+  - name: leef-ipv6-and-bad-port
+    raw: 'LEEF:2.0|Acme|NetFW|2.1|FwAllow|^|devTime=1791120067000^src=2001:db8::5^dst=2001:db8::6^srcPort=99999^dstPort=443^proto=TCP^action=allow'
+    expect:
+      src_endpoint.ip: "2001:db8::5"
+      src_endpoint.port: null
+      dst_endpoint.port: 443

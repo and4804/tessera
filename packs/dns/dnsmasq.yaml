@@ -1,0 +1,86 @@
+pack: 1
+id: dns.dnsmasq
+version: 1.0.0
+verified: false            # R12
+meta: {vendor: Simon Kelley, product: dnsmasq query log, category: dns}
+match:
+  priority: 50
+  all:
+    - contains: 'dnsmasq['
+framing: syslog
+extract:
+  kind: regex
+  options:
+    anchor: '^(?P<kind>query|reply|cached|cached-stale|forwarded|config)(?:\[(?P<qtype>[A-Za-z0-9]+)\])? (?P<body>.*)$'
+    dispatch_on: kind
+    dispatch_text: body
+    patterns:
+      query: '(?P<name>\S+) from (?P<client>\S+)'
+      reply: '(?P<name>\S+) is (?P<answer>\S+)'
+      cached: '(?P<name>\S+) is (?P<answer>\S+)'
+      cached-stale: '(?P<name>\S+) is (?P<answer>\S+)'
+      forwarded: '(?P<name>\S+) to (?P<upstream>\S+)'
+      config: '(?P<name>\S+) is (?P<answer>\S+)'
+ignore:
+  body: "free text after the verb; fully covered by dispatched fields and the vaulted raw"
+select:
+  - {when: {field: kind, eq: query}, class: dns_activity}
+  - {when: {field: kind, eq: reply}, class: dns_activity}
+  - {when: {field: kind, eq: cached}, class: dns_activity}
+  - otherwise: base_event
+classes:
+  dns_activity:
+    set:
+      activity_id: {from: kind, pipe: [{lookup: {map: {query: 1, reply: 2, cached: 2}, default: 99}}]}
+      time: {from: syslog.ts, pipe: [iso8601]}
+      severity_id: {const: 1}
+      query.hostname: {from: name, pipe: [lower]}
+      query.type: {from: qtype, pipe: [upper]}
+      src_endpoint.ip: {from: client, pipe: [ip]}
+      device.hostname: syslog.host
+  base_event:
+    set:
+      time: {from: syslog.ts, pipe: [iso8601]}
+      severity_id: {const: 1}
+      message: body
+      device.hostname: syslog.host
+tests:
+  - name: query-a
+    raw: '<30>Oct  4 13:21:07 gw-dns dnsmasq[1234]: query[A] www.example.com from 10.1.1.15'
+    expect:
+      class_uid: 4003
+      type_uid: 400301
+      activity_id: 1
+      query.hostname: www.example.com
+      query.type: A
+      src_endpoint.ip: 10.1.1.15
+      device.hostname: gw-dns
+  - name: reply
+    raw: '<30>Oct  4 13:21:07 gw-dns dnsmasq[1234]: reply www.example.com is 93.184.216.34'
+    expect:
+      class_uid: 4003
+      activity_id: 2
+      query.hostname: www.example.com
+      src_endpoint.ip: null
+      unmapped.answer: 93.184.216.34
+  - name: cached-nxdomain-and-mixed-case-name
+    raw: '<30>Oct  4 13:21:09 gw-dns dnsmasq[1234]: cached WWW.Example.COM is NXDOMAIN'
+    expect:
+      activity_id: 2
+      query.hostname: www.example.com
+      unmapped.answer: NXDOMAIN
+  - name: query-aaaa-ipv6-client
+    raw: '<30>Oct  4 13:21:10 gw-dns dnsmasq[1234]: query[AAAA] ipv6.example.com from 2001:db8::15'
+    expect:
+      query.type: AAAA
+      src_endpoint.ip: "2001:db8::15"
+  - name: forwarded-goes-to-base-event
+    raw: '<30>Oct  4 13:21:11 gw-dns dnsmasq[1234]: forwarded www.example.com to 8.8.8.8'
+    expect:
+      class_uid: 0
+      message: www.example.com to 8.8.8.8
+  - name: query-without-syslog-pri
+    raw: 'Oct  4 13:21:12 gw-dns dnsmasq[77]: query[MX] example.org from 192.168.1.9'
+    expect:
+      query.type: MX
+      src_endpoint.ip: 192.168.1.9

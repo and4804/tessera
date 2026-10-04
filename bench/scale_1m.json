@@ -1,0 +1,203 @@
+{
+  "n": 1000000,
+  "workers": 2,
+  "seed": 1,
+  "corpus": {
+    "lines": 1000000,
+    "clean": 998000,
+    "junk_or_mutated": 2000,
+    "seconds": 36.0
+  },
+  "publish_seconds": 25.8,
+  "drain_seconds": 156.2,
+  "drain_eps": 6402,
+  "ledger": {
+    "totals": {
+      "ingested": 1000000,
+      "vaulted": 1000000,
+      "normalized_parsed": 998840,
+      "normalized_partial": 143,
+      "unparsed": 1017,
+      "sunk": 1000000,
+      "dropped": 0,
+      "in_flight": 0
+    },
+    "conserved": true,
+    "lost": 0,
+    "dropped_by_reason": {},
+    "sunk_by_sink": {
+      "parquet": 1000000
+    },
+    "drained": true
+  },
+  "conservation": {
+    "input": 1000000,
+    "ledger_ingested": 1000000,
+    "ledger_vaulted": 1000000,
+    "ledger_normalized_parsed": 998840,
+    "ledger_normalized_partial": 143,
+    "ledger_unparsed": 1017,
+    "ledger_sunk": 1000000,
+    "ledger_dropped": 0,
+    "lake_rows": 1000000,
+    "lake_distinct_event_id": 1000000,
+    "lake_distinct_raw_ref": 1000000,
+    "lake_status": {
+      "parsed": 998840,
+      "unparsed": 1017,
+      "partial": 143
+    },
+    "vault_segments": 2,
+    "vault_frames": 1000000,
+    "vault_all_ok": true,
+    "vault_sealed": 2,
+    "lake_sha_multiset_equals_input": true,
+    "vault_sha_multiset_equals_input": true,
+    "vault_refs_equal_lake_refs": true,
+    "jsonl_lines": null
+  },
+  "conservation_ok": true,
+  "accuracy": {
+    "suricata": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 145491,
+      "perfect_lines": 145491
+    },
+    "ALL": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 998000,
+      "perfect_lines": 998000
+    },
+    "fortigate": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 194818,
+      "perfect_lines": 194818
+    },
+    "asa": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 194787,
+      "perfect_lines": 194787
+    },
+    "pfsense": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 97140,
+      "perfect_lines": 97140
+    },
+    "zeek": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 48845,
+      "perfect_lines": 48845
+    },
+    "cef": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 97574,
+      "perfect_lines": 97574
+    },
+    "leef": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 48644,
+      "perfect_lines": 48644
+    },
+    "squid": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 97628,
+      "perfect_lines": 97628
+    },
+    "dnsmasq": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "lines": 73073,
+      "perfect_lines": 73073
+    }
+  },
+  "clean_status_by_source": {
+    "suricata": {
+      "parsed": 145491
+    },
+    "fortigate": {
+      "parsed": 194818
+    },
+    "asa": {
+      "parsed": 194787
+    },
+    "pfsense": {
+      "parsed": 97140
+    },
+    "zeek": {
+      "parsed": 48845
+    },
+    "cef": {
+      "parsed": 97574
+    },
+    "leef": {
+      "parsed": 48644
+    },
+    "squid": {
+      "parsed": 97628
+    },
+    "dnsmasq": {
+      "parsed": 73073
+    }
+  },
+  "clean_parse_rate": 1.0,
+  "tamper": {
+    "flipped": {
+      "segment": "n1w0-000001",
+      "block": 582,
+      "offset": 30476656,
+      "n_frames": 504,
+      "silent_content_change": true
+    },
+    "cli_exit": 1,
+    "cli_pinpoint": [
+      "    -> segment n1w0-000001 block 582 frame 10: frame data does not match its recorded SHA-256"
+    ],
+    "verify_error": {
+      "segment": "n1w0-000001",
+      "block": 582,
+      "frame": 10,
+      "msg": "frame data does not match its recorded SHA-256"
+    },
+    "reads_ok": 999906,
+    "reads_failed": 94,
+    "failed_blocks": {
+      "n1w0-000001/582": 94
+    },
+    "http": {
+      "victim_raw": [
+        200,
+        false,
+        "IntegrityError"
+      ],
+      "bystander_raw": [
+        200,
+        true
+      ],
+      "victim_explain": [
+        409,
+        "IntegrityError"
+      ]
+    }
+  },
+  "tamper_ok": true,
+  "total_seconds": 329.2
+}
