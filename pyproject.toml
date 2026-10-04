@@ -10,7 +10,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 dev = ["pytest", "hypothesis", "pytest-benchmark", "pytest-asyncio", "ruff", "mypy", "types-PyYAML", "types-redis"]
-fast = ["uvloop", "google-re2", "watchfiles"]
+fast = ["uvloop; sys_platform != 'win32'", "google-re2", "watchfiles"]
 siem = ["opensearch-py"]
 
 [project.scripts]
