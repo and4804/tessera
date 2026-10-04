@@ -1,4 +1,4 @@
-# ULPF (Rosetta): slide outline (5 slides)
+# ULPF (Tessera): slide outline (5 slides)
 
 Human task: final slide design. Every number below is measured and sourced (`docs/benchmarks.md`, `bench/results.json`, `bench/scale_1m.json`);
 hardware for all of them: 2 vCPU Xeon 2.1 GHz, 7.8 GB RAM, Linux, Python 3.12.3, shared VM. Packs and the generator are `verified: false`

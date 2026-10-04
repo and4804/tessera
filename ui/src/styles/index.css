@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ───────────────────────────────────────────────────────────────────────────
-   ROSETTA — design tokens
+   TESSERA — design tokens
    A dark "archive mission-control": graphite panels, hairline rules, registration
    ticks on frames, one chartreuse signal colour used sparingly, serif display type
    against a mono data face. Channels are space-separated RGB so Tailwind alpha works.

@@ -1,4 +1,4 @@
-# ULPF (Rosetta): Universal Log Pre-processing Framework
+# ULPF (Tessera): Universal Log Pre-processing Framework
 
 Normalizes heterogeneous security logs to OCSF 1.3 without losing a byte (raw-first, hash-chained, signed vault), with data-driven
 parser packs, an Onboarding Studio for unseen sources, ML-ready output and a deployment that runs with no network. SIH 2026, PS 26156.

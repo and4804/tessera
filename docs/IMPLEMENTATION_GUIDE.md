@@ -1,6 +1,6 @@
 # ULPF — Universal Log Pre-processing Framework
 
-> Codename **Rosetta** · SIH 2026 · PS 26156 (NTRO) · Implementation guide for AI coding agents
+> Codename **Tessera** · SIH 2026 · PS 26156 (NTRO) · Implementation guide for AI coding agents
 > Stack: **Python 3.12** (backend, tooling, tests) + **TypeScript** (UI) + **YAML** (source packs). Nothing else.
 
 ---

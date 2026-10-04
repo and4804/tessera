@@ -1,7 +1,7 @@
 [project]
 name = "ulpf"
 version = "0.1.0"
-description = "Universal Log Pre-processing Framework (Rosetta)"
+description = "Universal Log Pre-processing Framework (Tessera)"
 requires-python = ">=3.12"
 dependencies = [
   "msgspec", "orjson", "pydantic>=2", "PyYAML", "zstandard", "PyNaCl",

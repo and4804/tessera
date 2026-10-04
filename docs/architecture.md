@@ -1,4 +1,4 @@
-# ULPF (Rosetta) architecture
+# ULPF (Tessera) architecture
 
 SIH 2026, PS 26156. Two pages: problem, architecture, invariants; then schema and lineage, onboarding, deployment, measured results.
 Packs and the log generator are **unverified against real devices** (`verified: false`); nothing here is a vendor-accuracy claim.

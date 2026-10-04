@@ -81,7 +81,7 @@ export function PageHeader({ index, title, accent, sub, right }: { index: string
   return (
     <header className="flex flex-wrap items-end justify-between gap-3 md:gap-6 px-4 md:px-8 pt-4 md:pt-7 pb-4 md:pb-5 animate-rise">
       <div className="min-w-0">
-        <div className="kicker flex items-center gap-2"><span className="text-signal">§{index}</span><span className="h-px w-8 bg-line-strong" />ULPF / Rosetta</div>
+        <div className="kicker flex items-center gap-2"><span className="text-signal">§{index}</span><span className="h-px w-8 bg-line-strong" />ULPF / Tessera</div>
         <h1 className="text-[26px] md:text-[34px] leading-[1.05] mt-1.5">
           {title}{accent && <> <em className="italic text-signal/95 font-light">{accent}</em></>}
         </h1>

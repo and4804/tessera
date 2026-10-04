@@ -12,7 +12,7 @@ export function YamlEditor({ value, onChange, issues, height = 440 }: { value: s
   useEffect(() => {
     if (!host.current) return;
     const editor = monaco.editor.create(host.current, {
-      value, language: "yaml", theme: "rosetta", automaticLayout: true,
+      value, language: "yaml", theme: "tessera", automaticLayout: true,
       fontFamily: '"JetBrains Mono", ui-monospace, monospace', fontSize: 12.5, lineHeight: 20, minimap: { enabled: false },
       scrollBeyondLastLine: false, tabSize: 2, insertSpaces: true, renderWhitespace: "none", padding: { top: 10, bottom: 10 },
       smoothScrolling: true, cursorBlinking: "smooth", overviewRulerBorder: false, glyphMargin: false, folding: true, wordWrap: "off"

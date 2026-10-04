@@ -1,4 +1,4 @@
-# ULPF UI — "Rosetta" console
+# ULPF UI — "Tessera" console
 
 React 18 + TypeScript + Vite, fully offline (R5): fonts via `@fontsource`, Monaco and ECharts bundled, no CDN, no telemetry.
 Everything on screen comes from the real API (`/api/v1`, R9). Wire contract: [`../docs/api-contract.md`](../docs/api-contract.md).

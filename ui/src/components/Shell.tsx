@@ -28,7 +28,7 @@ function Logo() {
       </svg>
       <div className="leading-none">
         <div className="font-display text-[19px] tracking-tight">ULPF</div>
-        <div className="kicker mt-0.5 !text-[9px]">rosetta</div>
+        <div className="kicker mt-0.5 !text-[9px]">tessera</div>
       </div>
     </div>
   );

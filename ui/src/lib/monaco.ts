@@ -11,7 +11,7 @@ import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
   getWorker: () => new EditorWorker()
 };
 
-monaco.editor.defineTheme("rosetta", {
+monaco.editor.defineTheme("tessera", {
   base: "vs-dark",
   inherit: true,
   rules: [
